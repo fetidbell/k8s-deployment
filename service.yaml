@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-application-service
+  labels:
+    k8s-app: backend-application-service
+spec:
+  ports:
+  - name: http
+    port: 8080
+	targetPort: 8080
+	protocol: TCP
+  selector:
+    app: backend-application

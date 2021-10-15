@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-application
+spec:
+  selector:
+    matchLabels:
+      app: application
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: backend-application
+    spec:
+      # Для равномерного распределения под по зонам кластера
+      # Финальная топология (4 пода) выглядит следующим образом:
+      # | Zone1 (2 pods) | Zone2 (1 pod) | Zone3 (1 pod) |
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: backend-application
+      containers:
+      - name: backend-application-v1-cnt
+        image: openjdk
+        volumeMounts:
+        - mountPath: /app
+          name: backend-application-v1-data
+        ports:
+        - containerPort: 8080
+        # Добавляем стартап-пробу с условием:
+        # 1) Для инициализации приложению требуется 5-10 секунд
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+        # Выставляем ограничения на ресурсы в соответствии с условиями:
+        # 1) Для нормальной работы необходимо 0.1 CPU и 128М памяти
+        # 2) Потребность в CPU значительно больше при старте приложения
+        #
+        # Запрашиваем минимально необходимое количество рес-ов, лимиты увеличиваем: 
+        # для CPU - в пять раз
+        # для памяти - в два раза, для учета возможных колебаний и отказоустойчивости
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+      volumes:
+      - name: backend-application-v1-data
+        hostPath:
+          path: /var/lib/k8s-volumes/backend-application-v1-data
+          type: Directory
